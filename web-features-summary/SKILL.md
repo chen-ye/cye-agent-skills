@@ -84,26 +84,36 @@ These features are usable in modern Chrome/Edge (Chromium) but lack full cross-b
   - *Status:* Chrome 126+. Safari 18+. Firefox pending.
   - *Use Case:* Morphing animations between multi-page navigations.
   - *Interop:* Graceful degradation (instant navigation).
-- **WebUSB / WebHID / WebSerial:**
-  - *Status:* Chrome-only. Firefox/Safari unlikely to implement due to fingerprinting concerns.
-  - *Use Case:* Direct hardware communication.
+  - **Web Hardware APIs:** Chrome-only. Firefox/Safari unlikely to implement.
+
+## Modern Best Practices & Discarded Idioms
+
+### Adopt These Idioms
+- **Immutable Arrays:** Use `toSorted()`, `toSpliced()`, and `with()` instead of mutation.
+- **Native Grouping:** Use `Object.groupBy()` instead of `reduce()` patterns.
+- **Parent Selectors:** Use `:has()` instead of JS-based class toggling for parent state.
+- **Component-First Responsive:** Use `@container` instead of `@media` for internal component layout.
+- **Native Overlays:** Use `<dialog>` and `popover` instead of custom modal/tooltip logic.
+- **Native Nesting:** Use CSS nesting directly; reduce reliance on preprocessors for basic nesting.
+
+### Discard These Patterns
+- **Mutation-in-place:** Stop using `sort()` or `reverse()` on original arrays when state management is involved.
+- **Viewport-Only Design:** Stop assuming component layout is tied strictly to screen size.
+- **JS-Heavy UI:** Stop using JavaScript for focus trapping, z-index management, and simple "click-outside" logic that `<dialog>` and `popover` handle natively.
 
 ## Procedural Guidance
 
 ### Verify Feature Availability
 1. Check the feature name against the list in `references/baseline_2023_2026.md`.
-2. Verify the "Baseline Status" and date.
-3. Confirm support versions for Chrome, Firefox, and Safari.
-
-### Implement Modern APIs
-1. Prefer APIs with "Baseline: high" for maximum stability.
-2. Use APIs with "Baseline: low" if the target audience uses evergreen browsers and the feature was released recently enough to be in current versions.
-3. Provide fallbacks or polyfills for features not yet in Baseline if broad legacy support is required.
+2. Check `references/modern_idioms.md` for recommended coding patterns.
+3. Verify the "Baseline Status" and date.
 
 ## Additional Resources
 
 ### Reference Files
-- **`references/baseline_2023_2026.md`** - Comprehensive list of 100+ web features reaching Baseline status between 2023 and 2026, sorted by release date.
+- **`references/baseline_2023_2026.md`** - Comprehensive list of 100+ web features reaching Baseline status.
+- **`references/modern_idioms.md`** - Detailed comparison of legacy vs. modern coding patterns.
+
 
 ### Source Data
 Information derived from the [web-features](https://www.npmjs.com/package/web-features) project.
