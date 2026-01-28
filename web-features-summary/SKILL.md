@@ -105,8 +105,5 @@ These features are usable in modern Chrome/Edge (Chromium) but lack full cross-b
 ### Reference Files
 - **`references/baseline_2023_2026.md`** - Comprehensive list of 100+ web features reaching Baseline status between 2023 and 2026, sorted by release date.
 
-### Examples
-- See the description field in the reference file for high-level usage context of each feature.
-
 ### Source Data
 Information derived from the [web-features](https://www.npmjs.com/package/web-features) project.
