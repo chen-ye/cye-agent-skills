@@ -1,0 +1,13 @@
+{
+  "name": "web-features-scripts",
+  "version": "1.0.0",
+  "description": "Scripts to update the web-features-summary skill",
+  "scripts": {
+    "update-reference": "node generate_skill_reference.js > ../references/baseline_2023_2026.md",
+    "analyze": "node analyze_high_impact.js",
+    "analyze-all": "node analyze_all_modern.js"
+  },
+  "dependencies": {
+    "web-features": "^2.0.0"
+  }
+}
