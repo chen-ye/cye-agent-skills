@@ -54,6 +54,40 @@ This skill summarizes web platform features that achieved Baseline status (avail
   - `<link rel="modulepreload">` (Preload ES modules).
   - `fetchpriority` (Hint resource priority to browser).
 
+## Chrome-Supported Modern Features (Limited Availability)
+These features are usable in modern Chrome/Edge (Chromium) but lack full cross-browser support. **Use with caution** and always provide fallbacks.
+
+### CSS & UI
+- **Anchor Positioning:** (`position-anchor`, `anchor()`)
+  - *Status:* Chrome 125+. No Firefox/Safari support.
+  - *Use Case:* Tying tooltips/menus to trigger elements without JS.
+  - *Interop:* Requires polyfill or JS fallback (e.g., Floating UI) for other browsers.
+- **Scroll-Driven Animations:** (`animation-timeline: scroll()`)
+  - *Status:* Chrome 115+. No stable Firefox/Safari.
+  - *Use Case:* Parallax effects, reading progress bars linked to scroll position.
+  - *Interop:* Graceful degradation (animation just doesn't play).
+- **@scope:**
+  - *Status:* Chrome 118+, Safari 17.4+. Firefox pending.
+  - *Use Case:* True component-level styling isolation.
+  - *Interop:* Use BEM/Modules as fallback for Firefox.
+- **Container Style Queries:** (`@container style(...)`)
+  - *Status:* Chrome 111+. No Firefox/Safari.
+  - *Use Case:* Styling children based on parent's *computed values* (e.g., color).
+  - *Interop:* Highly experimental.
+
+### Web Capabilities (Fugu)
+- **File System Access API:** (`window.showOpenFilePicker()`)
+  - *Status:* Chrome 86+, Safari (Origin Private FS only). Firefox (Origin Private FS only).
+  - *Use Case:* Reading/Writing local user files directly.
+  - *Interop:* Progressive enhancement only.
+- **View Transitions (Cross-Document):** (`@view-transition { navigation: auto; }`)
+  - *Status:* Chrome 126+. Safari 18+. Firefox pending.
+  - *Use Case:* Morphing animations between multi-page navigations.
+  - *Interop:* Graceful degradation (instant navigation).
+- **WebUSB / WebHID / WebSerial:**
+  - *Status:* Chrome-only. Firefox/Safari unlikely to implement due to fingerprinting concerns.
+  - *Use Case:* Direct hardware communication.
+
 ## Procedural Guidance
 
 ### Verify Feature Availability
