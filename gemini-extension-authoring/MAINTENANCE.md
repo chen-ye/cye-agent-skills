@@ -69,26 +69,22 @@ To update this skill, execute the following workflow:
 
 ### 5. Capabilities Synchronization
 
-- **Goal**: Ensure documentation for MCP servers, Skills, Sub-agents, and
-  Commands is up to date.
+- **Goal**: Ensure documentation and schemas for MCP servers, Skills,
+  Sub-agents, and Commands is up to date.
 - **Action**:
   1. Check for updates to **MCP Server** configuration in
      `gemini-extension.json`.
   2. Verify **Agent Skills** structure (`skills/` directory) and discovery
      mechanisms.
-  3. Verify **Sub-agents** (experimental) structure (`agents/` directory).
-  4. Verify **Custom Commands** (`commands/` directory) and conflict resolution
-     rules.
+  3. Verify **Sub-agents** (experimental) structure (`agents/` directory) and
+     update `references/agents-schema.md`.
+  4. Verify **Custom Commands** (`commands/` directory) structure and update
+     `references/commands-schema.md`.
   5. Update the corresponding sections in `SKILL.md`.
 
 ### 6. Publishing Workflow Check
 
-- **Goal**: Ensure the "Publishing" section in `SKILL.md` is accurate.
-- **Action**:
-  1. Fetch discovered pages related to releasing, publishing, or installing.
-  2. Verify the `gemini extensions install` URL format support (GitHub vs. other
-     registries).
-  3. Confirm the Git tag/release requirements.
+...
 
 ## Prompt for Updating
 
@@ -98,5 +94,6 @@ Use the following prompt to initiate an update cycle:
 > `skills/gemini-extension-authoring/MAINTENANCE.md`. Then, browse
 > `https://geminicli.com/docs/extensions/` and related sections to discover the
 > latest documentation pages. Comprehensively verify that `SKILL.md` (including
-> capabilities like MCP, Skills, Agents) and the schemas in `references/` match
-> the current official documentation. Report any discrepancies and fix them."
+> capabilities like MCP, Skills, Agents, Commands) and the schemas in
+> `references/` (extension, hooks, agents, commands) match the current official
+> documentation. Report any discrepancies and fix them."
