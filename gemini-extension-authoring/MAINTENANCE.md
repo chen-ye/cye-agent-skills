@@ -17,6 +17,13 @@ rely on a fixed list of URLs, as the documentation structure may change.
 
 To update this skill, execute the following workflow:
 
+### 0. Preparation
+
+- **Action**: You **MUST** activate the **Skill Development** skill before making any modifications to ensure the skill continues to follow best practices for structure, writing style, and progressive disclosure.
+  ```
+  activate_skill("Skill Development")
+  ```
+
 ### 1. Discovery and Navigation
 
 - **Goal**: Identify all relevant pages for extensions, hooks, and
@@ -91,7 +98,8 @@ To update this skill, execute the following workflow:
 Use the following prompt to initiate an update cycle:
 
 > "Please update the gemini-extension-authoring skill. Start by reading
-> `skills/gemini-extension-authoring/MAINTENANCE.md`. Then, browse
+> `skills/gemini-extension-authoring/MAINTENANCE.md`. Activate the **Skill
+> Development** skill to ensure quality standards. Then, browse
 > `https://geminicli.com/docs/extensions/` and related sections to discover the
 > latest documentation pages. Comprehensively verify that `SKILL.md` (including
 > capabilities like MCP, Skills, Agents, Commands) and the schemas in

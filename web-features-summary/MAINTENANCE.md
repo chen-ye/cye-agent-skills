@@ -15,6 +15,13 @@ Baseline status across major browsers.
 
 To update this skill, execute the following workflow:
 
+### 0. Preparation
+
+- **Action**: You **MUST** activate the **Skill Development** skill before making any modifications to ensure the skill continues to follow best practices for structure, writing style, and progressive disclosure.
+  ```
+  activate_skill("Skill Development")
+  ```
+
 ### 1. Dependency Update
 
 - **Goal**: Fetch the latest `web-features` dataset.
@@ -51,7 +58,8 @@ To update this skill, execute the following workflow:
 Use the following prompt to initiate an update cycle:
 
 > "Please update the web-features-summary skill. Start by reading
-> `skills/web-features-summary/MAINTENANCE.md`. Run the update scripts in
+> `skills/web-features-summary/MAINTENANCE.md`. Activate the **Skill
+> Development** skill to ensure quality standards. Run the update scripts in
 > `skills/web-features-summary/scripts/` to regenerate the baseline reference
 > and analyze new features. Update `SKILL.md` with any new high-impact additions
 > and commit the changes."
