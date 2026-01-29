@@ -8,6 +8,6 @@
     "analyze-all": "node analyze_all_modern.js"
   },
   "dependencies": {
-    "web-features": "^2.0.0"
+    "web-features": "^3.14.0"
   }
 }

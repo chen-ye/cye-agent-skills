@@ -30,6 +30,8 @@ function getBucket(f) {
 
 Object.values(features).forEach(feature => {
     // Filter for modern features (Baseline since 2023 or Baseline Low)
+    if (!feature.status) return;
+
     let isModern = false;
     if (feature.status.baseline === 'high') {
          if (feature.status.baseline_low_date && feature.status.baseline_low_date >= cutoffDate) {

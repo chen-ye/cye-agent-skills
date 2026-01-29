@@ -4,7 +4,10 @@ Collection of skills for AI agents.
 
 ## Skills
 
-- **web-features-summary**: Summarizes newly available web platform features (Baseline 2023-2026) and Chrome-specific capabilities.
+- **gemini-extension-authoring**: Provide expert guidance on creating,
+  packaging, and publishing extensions for the Gemini CLI.
+- **web-features-summary**: Summarizes newly available web platform features
+  (Baseline 2023-2026) and Chrome-specific capabilities.
 
 ## Usage
 
