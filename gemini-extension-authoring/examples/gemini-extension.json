@@ -1,0 +1,29 @@
+{
+  "name": "gemini-example-extension",
+  "displayName": "Example Extension",
+  "version": "1.0.0",
+  "description": "An example extension demonstrating best practices.",
+  "author": "Jane Doe",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/janedoe/gemini-example-extension.git"
+  },
+  "hooks": "./hooks/hooks.json",
+  "dependencies": {
+    "python": ">=3.8"
+  },
+  "settings": [
+    {
+      "name": "Service URL",
+      "description": "The URL of the external service to connect to.",
+      "envVar": "SERVICE_URL",
+      "default": "https://api.example.com"
+    },
+    {
+      "name": "API Token",
+      "description": "Your secret API token.",
+      "envVar": "SERVICE_API_TOKEN"
+    }
+  ]
+}

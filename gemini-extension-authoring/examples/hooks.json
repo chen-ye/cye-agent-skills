@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "AfterAgent": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "name": "example-audit-log",
+            "type": "command",
+            "command": "${extensionPath}/hooks/audit_logger.py",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "BeforeTool": [
+      {
+        "matcher": "write_file|replace",
+        "hooks": [
+          {
+            "name": "example-safety-check",
+            "type": "command",
+            "command": "${extensionPath}/hooks/safety_check.sh",
+            "timeout": 2000
+          }
+        ]
+      }
+    ]
+  }
+}
