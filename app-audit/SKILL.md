@@ -15,9 +15,9 @@ First, gather the complete list of installed software from both the Termux envir
 
 **Execute the following commands:**
 1.  `pkg list-installed` (Termux packages)
-2.  `cmd package list packages -3` (User/Third-party Android apps)
+2.  `python3 %SKILL_DIR%/scripts/get_app_labels.py` (Android apps with Friendly Names)
 
-*Note: If `cmd package` fails with permission errors, try `pm list packages -3`.*
+*Note: The Python script requires `aapt` to be installed. If it fails, check if `aapt` is present or fall back to `cmd package list packages -3`.*
 
 ### 2. Analysis Strategy
 Once the lists are retrieved, analyze them using the following heuristics. Do NOT output the raw lists unless explicitly asked.
