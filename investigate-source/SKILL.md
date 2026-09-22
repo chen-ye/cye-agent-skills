@@ -1,6 +1,6 @@
 ---
 name: investigate-source
-description: This skill should be used when the user asks to "investigate source", "investigate codebase", "inspect source code", "how is this implemented", "find implementation of tool", "source code investigation", or when starting an investigation into any software package, tool, CLI, framework, or dependency. Encodes the three-tier resolution hierarchy: utilizing existing local clones first, falling back to temporary shallow clones, and strictly resorting to compiled or minified runtimes only when source is unobtainable.
+description: "This skill should be used when the user asks to \"investigate source\", \"investigate codebase\", \"inspect source code\", \"how is this implemented\", \"find implementation of tool\", \"source code investigation\", or when starting an investigation into any software package, tool, CLI, framework, or dependency. Encodes the three-tier resolution hierarchy: utilizing existing local clones first, falling back to temporary shallow clones, and strictly resorting to compiled or minified runtimes only when source is unobtainable."
 version: 0.1.0
 ---
 
