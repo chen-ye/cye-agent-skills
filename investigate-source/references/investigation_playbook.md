@@ -4,6 +4,14 @@ This playbook provides a systematic, step-by-step methodology for dissecting an 
 
 ---
 
+## Phase 0: Release Version & Checkout Freshness
+
+Before diving into code analysis:
+1. **Target Latest Released Versions**: Investigations should **always be performed on the latest released versions** (or latest release tag / stable default branch) unless explicitly specified otherwise.
+2. **Pull Updates as Needed**: The investigator is authorized to pull updates (`git fetch`, `git pull`) to local checkouts as needed so that findings reflect the latest release state. Always verify `git status --porcelain` to preserve uncommitted local work.
+
+---
+
 ## Phase 1: Entrypoint & Manifest Reconnaissance
 
 Start by identifying the language runtime, package boundaries, and entrypoints:

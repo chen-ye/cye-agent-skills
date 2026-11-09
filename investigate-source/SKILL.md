@@ -47,17 +47,21 @@ Before manually searching directories or invoking `git clone`, run `scripts/reso
 
 When an existing checkout is located:
 
-1. **Verify Checkout Freshness**:
-   ```bash
-   git -C <path> rev-parse --abbrev-ref HEAD
-   git -C <path> rev-parse --short HEAD
-   git -C <path> status --porcelain
-   ```
-2. **Prioritize Real Files Over Guesswork**:
+1. **Target Latest Released Versions**:
+   * Investigations should **always be performed on the latest released versions** (e.g. latest stable release tag or default release branch) unless otherwise specified by the user.
+2. **Pull Updates as Needed**:
+   * It is completely acceptable and expected for the investigator to pull updates to local checkouts as needed (`git -C <path> fetch`, `git -C <path> pull`) to ensure the investigation reflects the latest released version.
+3. **Verify Freshness & Preserve Repository Integrity**:
+   * Check checkout state and cleanliness:
+     ```bash
+     git -C <path> rev-parse --abbrev-ref HEAD
+     git -C <path> rev-parse --short HEAD
+     git -C <path> status --porcelain
+     ```
+   * Before pulling or switching refs, verify `git -C <path> status --porcelain` to avoid overwriting or conflicting with uncommitted user work. Preserve local modifications (e.g. via stash or clean worktree checks).
+4. **Prioritize Real Files Over Guesswork**:
    * Inspect actual files on disk using `read`, `grep`, and `glob`.
    * Never speculate on file contents or extrapolate from memory without reading.
-3. **Preserve Repository Integrity**:
-   * Do not modify working tree state or switch branches unless explicitly requested by the user.
 
 ---
 

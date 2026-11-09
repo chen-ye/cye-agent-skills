@@ -20,11 +20,17 @@ OpenCode source checkouts typically exist in standard local workspace directorie
 
 Always prioritize reading the actual source files and documentation in the checkout over relying on pre-trained assumptions or guesswork.
 
+### Versioning & Local Checkout Update Policy
+
+* **Target Latest Released Versions**: Investigations should **always be performed on the latest released versions** of OpenCode unless otherwise specified.
+* **Pulling Updates Permitted**: It is completely acceptable and expected for the investigator to pull updates to local checkouts (e.g. `~/Projects/public/opencode`) as needed (`git pull`, `git fetch`) to ensure findings align with the latest release.
+* **Working Tree Safety**: Check `git status --porcelain` before pulling to ensure any uncommitted local work is not overwritten or conflicted.
+
 ---
 
 ## Core Investigation Workflows
 
-### 0. Locating the Active OpenCode Checkout
+### 0. Locating the Active OpenCode Checkout & Verifying Freshness
 
 To quickly identify the active checkout path, git revision, and documentation tree, execute `scripts/find_opencode_checkout.sh`:
 
@@ -35,6 +41,14 @@ To quickly identify the active checkout path, git revision, and documentation tr
 To output machine-readable JSON:
 ```bash
 ~/.gemini/skills/investigate-opencode/scripts/find_opencode_checkout.sh --json
+```
+
+To check for updates and pull the latest release:
+```bash
+git -C ~/Projects/public/opencode fetch --tags
+git -C ~/Projects/public/opencode status --short
+# Pull updates as needed:
+git -C ~/Projects/public/opencode pull
 ```
 
 ---

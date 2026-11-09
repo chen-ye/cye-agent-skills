@@ -18,6 +18,11 @@ Antigravity's runtime divides responsibilities between an outer orchestrator and
 
 Always query `~/.local/share/antigravity/localharness.debug` directly for static analysis and debugging to avoid extracting from the archive repeatedly.
 
+### Versioning & Binary Asset Update Policy
+
+* **Target Latest Released Versions**: Investigations should **always be performed on the latest released versions** of Antigravity unless otherwise specified.
+* **Updating Local Assets**: Check the active installed version against the latest package published in the ACP Agent Registry (`https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json`), and re-acquire/update local binaries (`agy_acp_server.par`, `localharness.debug`) as needed when a newer release is published.
+
 ---
 
 ## Core Investigation Workflows

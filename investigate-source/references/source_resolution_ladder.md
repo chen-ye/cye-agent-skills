@@ -61,14 +61,17 @@ A candidate directory is confirmed as a valid source checkout if it contains eit
   * Java: `pom.xml`, `build.gradle`
   * Bazel: `WORKSPACE`, `WORKSPACE.bazel`, `MODULE.bazel`
 
-### Freshness & Revision Check
+### Freshness, Updates & Release Version Invariants
 When an existing clone is found:
 ```bash
 git -C <path> rev-parse --abbrev-ref HEAD
 git -C <path> rev-parse --short HEAD
 git -C <path> status --porcelain
 ```
-Always note whether the local branch matches upstream or carries local modifications.
+
+* **Target Latest Released Versions**: Investigations should **always be performed on the latest released versions** (or latest stable release tags / default release branch) unless explicitly specified otherwise by the user.
+* **Pulling Updates Is Permitted**: The investigator is explicitly authorized to pull updates to local checkouts as needed (`git -C <path> fetch`, `git -C <path> pull`) to bring an outdated clone up to the latest released state.
+* **Preserve Uncommitted Work**: Check `git status --porcelain` before updating. Never overwrite uncommitted user modifications or clobber local branches.
 
 ---
 

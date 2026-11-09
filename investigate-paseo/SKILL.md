@@ -33,6 +33,12 @@ Paseo is structured as a TypeScript monorepo combining daemon services, a multi-
    * Internal Subsystem Docs: `~/Projects/public/paseo/docs/` (42 Markdown files).
    * Public Integrator Docs: `~/Projects/public/paseo/public-docs/` (66 Markdown files).
 
+### Versioning & Local Checkout Update Policy
+
+* **Target Latest Released Versions**: Investigations should **always be performed on the latest released versions** of Paseo (both daemon/CLI runtime and source checkout) unless otherwise specified.
+* **Pulling Updates Permitted**: It is completely acceptable and expected for the investigator to pull updates to local checkouts (`~/Projects/public/paseo`) as needed (`git pull`, `git fetch`) to ensure analysis reflects the latest released version.
+* **Working Tree Safety**: Check `git status --porcelain` before pulling to ensure local modifications are preserved.
+
 ---
 
 ## Core Investigation Workflows
@@ -48,6 +54,14 @@ To quickly identify the active binary path, version, daemon process status, conf
 To output machine-readable JSON:
 ```bash
 ~/.config/opencode/skills/investigate-paseo/scripts/find_paseo_installation.sh --json
+```
+
+To check for updates and pull the latest release in the source checkout:
+```bash
+git -C ~/Projects/public/paseo fetch --tags
+git -C ~/Projects/public/paseo status --short
+# Pull latest updates as needed:
+git -C ~/Projects/public/paseo pull
 ```
 
 ---

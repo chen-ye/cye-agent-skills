@@ -34,6 +34,12 @@ Spaces is a high-performance polyrepo workspace manager and metabuild task runne
 
 Always prioritize reading the actual source code in `~/Projects/public/work-spaces` and querying `spaces docs` over guesswork.
 
+### Versioning & Local Checkout Update Policy
+
+* **Target Latest Released Versions**: Investigations should **always be performed on the latest released versions** of Spaces (both active CLI binary and source checkout) unless otherwise specified.
+* **Pulling Updates Permitted**: It is completely acceptable and expected for the investigator to pull updates to local checkouts (`~/Projects/public/work-spaces`) as needed (`git pull`, `git fetch`) to reflect the latest released version.
+* **Working Tree Safety**: Check `git status --porcelain` before pulling to ensure local modifications are preserved.
+
 ---
 
 ## Core Investigation Workflows
@@ -49,6 +55,14 @@ To quickly identify the active binary path, version, source checkout, global sto
 To output machine-readable JSON:
 ```bash
 ~/.config/opencode/skills/investigate-spaces/scripts/find_spaces_checkout.sh --json
+```
+
+To check for updates and pull the latest release in the source checkout:
+```bash
+git -C ~/Projects/public/work-spaces fetch --tags
+git -C ~/Projects/public/work-spaces status --short
+# Pull latest updates as needed:
+git -C ~/Projects/public/work-spaces pull
 ```
 
 ---

@@ -35,6 +35,12 @@ OMP is distributed as a self-contained single-executable binary powered by Bun a
    * Upstream Repository: `https://github.com/can1357/oh-my-pi` (branch: `main`)
    * Structure: Full Bun + Rust monorepo containing TypeScript packages under `packages/` (e.g. `@oh-my-pi/pi-coding-agent`) and native Rust crates under `crates/` (e.g. `crates/pi-natives`, `crates/pi-shell`, `crates/pi-ast`).
 
+### Versioning & Local Checkout Update Policy
+
+* **Target Latest Released Versions**: Investigations should **always be performed on the latest released versions** of OMP (both active runtime binary and source checkout) unless otherwise specified.
+* **Pulling Updates Permitted**: It is completely acceptable and expected for the investigator to pull updates to local checkouts (`~/Projects/public/oh-my-pi`) as needed (`git pull`, `git fetch`) to reflect the latest released version.
+* **Preserve Local Changes**: Always check `git status --porcelain` before pulling to ensure local modifications are preserved.
+
 ---
 
 ## Core Investigation Workflows
@@ -50,6 +56,14 @@ To quickly identify the active binary path, version, configuration state, native
 To output machine-readable JSON:
 ```bash
 ~/.gemini/skills/investigate-omp/scripts/find_omp_installation.sh --json
+```
+
+To check for updates and pull the latest release in the source checkout:
+```bash
+git -C ~/Projects/public/oh-my-pi fetch --tags
+git -C ~/Projects/public/oh-my-pi status --short
+# Pull latest updates as needed:
+git -C ~/Projects/public/oh-my-pi pull
 ```
 
 ---
