@@ -9,6 +9,8 @@ Encodes the Three-Tier Investigation Hierarchy for arbitrary software:
 """
 
 import argparse
+import configparser
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import re
@@ -21,10 +23,13 @@ from urllib.parse import urlparse
 # Standard local development and workspace roots to search
 DEFAULT_SEARCH_ROOTS = [
     Path.home() / "Projects" / "public",
+    Path.home() / "Projects" / "spaces",
+    Path.home() / "Projects" / "workspaces",
     Path.home() / "Projects",
     Path.home() / "Extern",
     Path.home(),
     Path("/workspace"),
+    Path("/tmp/opencode"),
     Path("/tmp/source-investigations"),
 ]
 
@@ -41,6 +46,33 @@ SOURCE_MANIFESTS = [
     "WORKSPACE.bazel",
 ]
 
+SKIP_CONTAINER_DIRS = {
+    "node_modules",
+    "target",
+    "build",
+    "cbuild",
+    "dist",
+    "venv",
+    "aws_venv",
+    "__pycache__",
+    "coverage",
+    "logs",
+    "packages",
+}
+
+WEB_UI_PATH_SEGMENTS = {
+    "blob",
+    "tree",
+    "commit",
+    "commits",
+    "pull",
+    "pulls",
+    "issues",
+    "releases",
+    "actions",
+    "-",
+}
+
 
 def get_search_roots() -> list[Path]:
     custom = os.environ.get("INVESTIGATE_SEARCH_ROOTS")
@@ -53,19 +85,53 @@ def get_search_roots() -> list[Path]:
     return DEFAULT_SEARCH_ROOTS
 
 
-def normalize_target_name(raw_name: str) -> str:
-    """Extract canonical project identifier from a name or URL."""
+def parse_repo_spec(raw_name: str) -> tuple[str | None, str | None, str]:
+    """Parse raw target or git URL into (host, owner, repo)."""
     s = raw_name.strip()
+    if s.endswith("/"):
+        s = s.rstrip("/")
+
+    if "://" in s or s.startswith("git@"):
+        if s.startswith("git@") and "://" not in s:
+            host_part, _, path_part = s[4:].partition(":")
+            parsed_host = host_part or None
+            parts = [p for p in path_part.split("/") if p]
+        else:
+            parsed = urlparse(s)
+            parsed_host = parsed.hostname
+            parts = [p for p in parsed.path.split("/") if p]
+
+        for idx, seg in enumerate(parts):
+            if idx >= 2 and seg in WEB_UI_PATH_SEGMENTS:
+                parts = parts[:idx]
+                break
+
+        if parts and parts[-1].endswith(".git"):
+            parts[-1] = parts[-1][:-4]
+
+        if len(parts) >= 2:
+            return parsed_host, "/".join(parts[:-1]), parts[-1]
+        if len(parts) == 1:
+            return parsed_host, None, parts[0]
+        return parsed_host, None, s
+
     if s.endswith(".git"):
         s = s[:-4]
-    if "://" in s or s.startswith("git@"):
-        parsed = urlparse(s if "://" in s else f"https://{s.replace('git@', '').replace(':', '/')}")
-        parts = [p for p in parsed.path.split("/") if p]
-        if parts:
-            return parts[-1]
+
     if "/" in s and not s.startswith("/") and not s.startswith("."):
-        return s.split("/")[-1]
-    return Path(s).name
+        parts = [p for p in s.split("/") if p]
+        if len(parts) >= 3 and "." in parts[0]:
+            return parts[0], "/".join(parts[1:-1]), parts[-1]
+        if len(parts) >= 2:
+            return None, "/".join(parts[:-1]), parts[-1]
+
+    return None, None, Path(s).name
+
+
+def normalize_target_name(raw_name: str) -> str:
+    """Extract canonical project identifier from a name or URL."""
+    _, _, repo = parse_repo_spec(raw_name)
+    return repo
 
 
 def is_valid_source_dir(dir_path: Path) -> bool:
@@ -77,6 +143,40 @@ def is_valid_source_dir(dir_path: Path) -> bool:
         if (dir_path / manifest).exists():
             return True
     return False
+
+
+def read_git_remote_url(dir_path: Path) -> str | None:
+    """Read origin remote URL directly from .git/config without spawning subprocesses."""
+    git_entry = dir_path / ".git"
+    if not git_entry.exists():
+        return None
+
+    git_dir = git_entry
+    try:
+        if git_entry.is_file():
+            first_line = git_entry.read_text(encoding="utf-8", errors="ignore").splitlines()[0].strip()
+            if first_line.startswith("gitdir:"):
+                raw_gitdir = first_line.split(":", 1)[1].strip()
+                git_dir = (dir_path / raw_gitdir).resolve()
+                commondir_file = git_dir / "commondir"
+                if commondir_file.is_file():
+                    common_rel = commondir_file.read_text(encoding="utf-8", errors="ignore").strip()
+                    git_dir = (git_dir / common_rel).resolve()
+
+        cfg_path = git_dir / "config"
+        if not cfg_path.is_file():
+            return None
+
+        cp = configparser.ConfigParser(interpolation=None, strict=False)
+        cp.read(cfg_path, encoding="utf-8")
+        if cp.has_option('remote "origin"', "url"):
+            return cp.get('remote "origin"', "url").strip()
+        for section in cp.sections():
+            if section.startswith("remote ") and cp.has_option(section, "url"):
+                return cp.get(section, "url").strip()
+    except Exception:
+        pass
+    return None
 
 
 def get_git_info(dir_path: Path) -> dict:
@@ -96,14 +196,7 @@ def get_git_info(dir_path: Path) -> dict:
             ["git", "-C", str(dir_path), "status", "--porcelain"],
             stderr=subprocess.DEVNULL
         ).decode().strip()
-        remote = None
-        try:
-            remote = subprocess.check_output(
-                ["git", "-C", str(dir_path), "config", "--get", "remote.origin.url"],
-                stderr=subprocess.DEVNULL
-            ).decode().strip()
-        except Exception:
-            pass
+        remote = read_git_remote_url(dir_path)
 
         info.update({
             "is_git": True,
@@ -117,7 +210,13 @@ def get_git_info(dir_path: Path) -> dict:
     return info
 
 
-def matches_target(dir_path: Path, target: str, norm_name: str) -> bool:
+def matches_target(
+    dir_path: Path,
+    target: str,
+    norm_name: str,
+    req_host: str | None = None,
+    req_owner: str | None = None,
+) -> bool:
     """Generic heuristic: does this directory represent the target software?"""
     dir_name = dir_path.name.lower()
     target_clean = norm_name.lower()
@@ -128,109 +227,202 @@ def matches_target(dir_path: Path, target: str, norm_name: str) -> bool:
         target_clean.replace("-", "_")
     }
 
+    remote = read_git_remote_url(dir_path)
+    if req_host or req_owner:
+        if not remote:
+            return False
+        rem_host, rem_owner, _ = parse_repo_spec(remote)
+        if req_host and (not rem_host or req_host.lower() != rem_host.lower()):
+            return False
+        if req_owner and (not rem_owner or req_owner.lower() != rem_owner.lower()):
+            return False
+
     # 1. Directory name match
     if dir_name in aliases:
         return True
 
     # 2. Git remote URL match (generic for any repo name vs folder name discrepancy)
-    if (dir_path / ".git").exists():
-        try:
-            remote = subprocess.check_output(
-                ["git", "-C", str(dir_path), "config", "--get", "remote.origin.url"],
-                stderr=subprocess.DEVNULL
-            ).decode().strip().lower()
-            if remote:
-                remote_repo = normalize_target_name(remote).lower()
-                if remote_repo in aliases or target.lower() in remote:
-                    return True
-        except Exception:
-            pass
+    if remote:
+        remote_lower = remote.lower()
+        remote_repo = normalize_target_name(remote).lower()
+        if remote_repo in aliases or target.lower() in remote_lower:
+            return True
 
     # 3. Manifest package name match
-    pkg_json = dir_path / "package.json"
-    if pkg_json.is_file():
-        try:
-            with open(pkg_json, "r", encoding="utf-8", errors="ignore") as f:
-                data = json.load(f)
-                name = data.get("name", "").lower()
-                if name == target_clean or name.endswith(f"/{target_clean}"):
-                    return True
-        except Exception:
-            pass
+    if not req_host and not req_owner:
+        pkg_json = dir_path / "package.json"
+        if pkg_json.is_file():
+            try:
+                with open(pkg_json, "r", encoding="utf-8", errors="ignore") as f:
+                    data = json.load(f)
+                    name = data.get("name", "").lower()
+                    if name == target_clean or name.endswith(f"/{target_clean}"):
+                        return True
+            except Exception:
+                pass
 
-    cargo_toml = dir_path / "Cargo.toml"
-    if cargo_toml.is_file():
-        try:
-            content = cargo_toml.read_text(encoding="utf-8", errors="ignore")
-            for match in re.finditer(r'name\s*=\s*["\']([^"\']+)["\']', content):
-                if match.group(1).lower() in aliases:
-                    return True
-        except Exception:
-            pass
+        cargo_toml = dir_path / "Cargo.toml"
+        if cargo_toml.is_file():
+            try:
+                content = cargo_toml.read_text(encoding="utf-8", errors="ignore")
+                for match in re.finditer(r'name\s*=\s*["\']([^"\']+)["\']', content):
+                    if match.group(1).lower() in aliases:
+                        return True
+            except Exception:
+                pass
 
     return False
 
 
+def _iter_subdirs(parent: Path) -> list[Path]:
+    try:
+        children = [
+            c for c in parent.iterdir()
+            if c.is_dir() and not c.name.startswith(".") and c.name not in SKIP_CONTAINER_DIRS
+        ]
+        # Prefer primary *-dev workspaces ahead of ticket and PR-* review worktrees
+        children.sort(key=lambda p: (p.name.startswith("PR-"), not p.name.lower().endswith("-dev"), p.name.lower()))
+        return children
+    except PermissionError:
+        return []
+
+
 def find_existing_local_clone(target: str) -> tuple[Path | None, list[str]]:
     checked_paths = []
-    norm_name = normalize_target_name(target)
+    req_host, req_owner, norm_name = parse_repo_spec(target)
+    candidate_names = list(dict.fromkeys([
+        norm_name,
+        norm_name.replace("_", "-"),
+        norm_name.replace("-", "_"),
+    ]))
+
+    def check_dir(path: Path) -> bool:
+        checked_paths.append(str(path))
+        return (
+            path.is_dir()
+            and is_valid_source_dir(path)
+            and matches_target(path, target, norm_name, req_host, req_owner)
+        )
 
     # 1. Check current working directory and ancestors
     cwd = Path.cwd().resolve()
     curr = cwd
     while curr != curr.parent:
-        if matches_target(curr, target, norm_name) and is_valid_source_dir(curr):
+        if is_valid_source_dir(curr) and matches_target(curr, target, norm_name, req_host, req_owner):
             return curr, [str(curr)]
         curr = curr.parent
 
-    # 2. Check search roots
+    # 2. Check search roots (including nested non-git workspace containers)
     for root in get_search_roots():
         if not root.is_dir():
             continue
 
-        # Check root/<alias> directly
-        for candidate_name in [norm_name, norm_name.replace("_", "-"), norm_name.replace("-", "_")]:
-            candidate = root / candidate_name
-            checked_paths.append(str(candidate))
-            if candidate.is_dir() and matches_target(candidate, target, norm_name) and is_valid_source_dir(candidate):
+        for cname in candidate_names:
+            candidate = root / cname
+            if check_dir(candidate):
                 return candidate, checked_paths
 
-        # Scan depth 1 subdirectories in root
-        try:
-            for child in root.iterdir():
-                if not child.is_dir() or child.name.startswith("."):
-                    continue
-                if matches_target(child, target, norm_name) and is_valid_source_dir(child):
-                    checked_paths.append(str(child))
-                    return child, checked_paths
-        except PermissionError:
-            continue
+        for child in _iter_subdirs(root):
+            if is_valid_source_dir(child) and matches_target(child, target, norm_name, req_host, req_owner):
+                checked_paths.append(str(child))
+                return child, checked_paths
+
+            if (child / ".git").exists():
+                if (child / ".gitmodules").exists():
+                    for cname in candidate_names:
+                        sub_cand = child / cname
+                        if check_dir(sub_cand):
+                            return sub_cand, checked_paths
+                continue
+
+            # Non-git workspace container (e.g., multi-repo / Spaces workspace)
+            for cname in candidate_names:
+                ws_cand = child / cname
+                if check_dir(ws_cand):
+                    return ws_cand, checked_paths
+
+            for grandchild in _iter_subdirs(child):
+                if is_valid_source_dir(grandchild) and matches_target(grandchild, target, norm_name, req_host, req_owner):
+                    checked_paths.append(str(grandchild))
+                    return grandchild, checked_paths
+
+                if not (grandchild / ".git").exists():
+                    for cname in candidate_names:
+                        org_cand = grandchild / cname
+                        if check_dir(org_cand):
+                            return org_cand, checked_paths
 
     return None, checked_paths
+
+
+def get_authenticated_gh_hosts() -> list[str]:
+    """Return authenticated GitHub / GitHub Enterprise hosts via gh CLI."""
+    if not shutil.which("gh"):
+        return []
+    try:
+        raw = subprocess.check_output(
+            ["gh", "auth", "status", "--json", "hosts"],
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        ).decode().strip()
+        data = json.loads(raw)
+        hosts = list((data.get("hosts") or {}).keys())
+        # Probe github.com first when present, followed by enterprise hosts
+        hosts.sort(key=lambda h: (h != "github.com", h))
+        return hosts
+    except Exception:
+        return ["github.com"]
+
+
+def _gh_repo_view_url(repo_ref: str) -> str | None:
+    try:
+        output = subprocess.check_output(
+            ["gh", "repo", "view", repo_ref, "--json", "url", "-q", ".url"],
+            stderr=subprocess.DEVNULL,
+            timeout=8,
+        ).decode().strip()
+        if output:
+            return f"{output}.git" if not output.endswith(".git") else output
+    except Exception:
+        pass
+    return None
 
 
 def resolve_upstream_url(target: str) -> str | None:
     """Probe if target is or resolves to a valid git repository URL."""
     s = target.strip()
-    if s.startswith("http://") or s.startswith("https://") or s.startswith("git@"):
+    req_host, req_owner, repo = parse_repo_spec(s)
+
+    if s.startswith("http://") or s.startswith("https://"):
+        if req_host and req_owner:
+            parsed = urlparse(s)
+            base = f"{parsed.scheme}://{parsed.netloc}/{req_owner}/{repo}"
+            return base if base.endswith(".git") else f"{base}.git"
         return s
 
-    if "/" in s and not s.startswith(".") and not s.startswith("/"):
-        # e.g. "owner/repo"
-        candidate_url = f"https://github.com/{s}.git"
-        return candidate_url
+    if s.startswith("git@"):
+        return s
 
-    # Check via gh CLI if available
-    if shutil.which("gh"):
-        try:
-            output = subprocess.check_output(
-                ["gh", "repo", "view", s, "--json", "url", "-q", ".url"],
-                stderr=subprocess.DEVNULL
-            ).decode().strip()
-            if output:
-                return f"{output}.git" if not output.endswith(".git") else output
-        except Exception:
-            pass
+    if req_host and req_owner:
+        return _gh_repo_view_url(f"{req_host}/{req_owner}/{repo}") or f"https://{req_host}/{req_owner}/{repo}.git"
+
+    gh_hosts = get_authenticated_gh_hosts()
+
+    if req_owner:
+        if gh_hosts:
+            refs = [f"{host}/{req_owner}/{repo}" for host in gh_hosts]
+            with ThreadPoolExecutor(max_workers=min(4, len(refs))) as pool:
+                for url in pool.map(_gh_repo_view_url, refs):
+                    if url:
+                        return url
+            if "github.com" in gh_hosts:
+                return None
+        return f"https://github.com/{req_owner}/{repo}.git"
+
+    if gh_hosts:
+        url = _gh_repo_view_url(repo)
+        if url:
+            return url
 
     return None
 
@@ -407,7 +599,7 @@ def main():
         print(json.dumps(result, indent=2))
     else:
         print("=" * 80)
-        print(" [TIER 3] SOURCE UNAVAILABLE - RUNTIME ARTIFACT FALLBACK")
+        print(" [TIER 1/2 EXHAUSTED -> TIER 3] SOURCE UNAVAILABLE - RUNTIME ARTIFACT FALLBACK")
         print("=" * 80)
         print(f"Project:        {norm_name}")
         print(f"Source Code:    Not found locally or via public remotes.")

@@ -16,7 +16,7 @@ Always resolve and examine target software using this strict precedence order:
 
 | Tier | Strategy | Location & Method | When to Use |
 | :--- | :--- | :--- | :--- |
-| **Tier 1 (Preferred)** | **Existing Local Clone** | Search `~/Projects/public/`, `~/Extern/`, `~/Projects/`, cwd | Always check first. Zero latency, preserves local branches and context. |
+| **Tier 1 (Preferred)** | **Existing Local Clone** | Search `~/Projects/public/`, `~/Projects/spaces/`, `~/Projects/`, `~/Extern/`, cwd | Always check first. Zero latency, preserves local branches and context. |
 | **Tier 2 (Fallback)** | **Ephemeral / Shallow Clone** | Clone `--depth=1` to `/tmp/source-investigations/<name>` | Use when no local clone exists, but upstream repository is public or accessible. |
 | **Tier 3 (Last Resort)** | **Compiled / Minified Runtime** | Inspect debug symbols, DWARF line tables, embedded strings, `.rodata` | **STRICTLY FORBIDDEN** unless source code is completely proprietary or unobtainable. |
 

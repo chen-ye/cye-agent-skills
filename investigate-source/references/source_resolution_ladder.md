@@ -43,7 +43,7 @@ Before performing any network requests or cloning operations, search for an exis
 The agent must verify candidate locations in order:
 1. **Current Workspace & Ancestors**: The active project directory and any parent workspaces.
 2. **Primary Public Checkouts**: `~/Projects/public/<target>` (or `/home/cye/Projects/public/<target>`).
-3. **Workspace Checkouts**: `~/Projects/<target>`, `~/Projects/workspaces/<target>`.
+3. **Workspace Checkouts**: `~/Projects/spaces/<workspace>/<org>/<target>`, `~/Projects/workspaces/<target>`, `~/Projects/<target>`.
 4. **External/Submodule Clones**: `~/Extern/<target>`.
 5. **Home Directory**: `~/<target>`.
 6. **Container/Host Roots**: `/workspace/<target>`.
@@ -80,7 +80,7 @@ git -C <path> status --porcelain
 If no local clone exists, obtain the source directly from upstream using high-speed shallow cloning.
 
 ### Upstream Discovery Heuristics
-1. **GitHub CLI**: `gh repo view <org/repo> --json url`
+1. **GitHub / Enterprise CLI**: `gh repo view [<host>/]<org>/<repo> --json url` across all authenticated hosts (`gh auth status --json hosts`)
 2. **NPM Registry**: `npm view <package> repository.url`
 3. **PyPI API**: Query `https://pypi.org/pypi/<package>/json` for `project_urls.Source` or `project_urls.Homepage`.
 4. **Crates.io**: Query `https://crates.io/api/v1/crates/<crate>` for `repository`.
