@@ -12,14 +12,6 @@ Collection of skills for AI agents.
 
 ## Usage
 
-### Gemini CLI
-
-Install a skill into your current workspace:
-
-```bash
-gemini skills install https://github.com/chen-ye/cye-agent-skills.git --path <skill-name> --scope workspace
-```
-
 ### Generic Skills CLI
 
 Install via [skills](https://github.com/vercel-labs/skills) CLI:
