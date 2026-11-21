@@ -20,6 +20,11 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
+EPHEMERAL_ROOTS = (
+    Path("/tmp/opencode"),
+    Path("/tmp/source-investigations"),
+)
+
 # Standard local development and workspace roots to search
 DEFAULT_SEARCH_ROOTS = [
     Path.home() / "Projects" / "public",
@@ -29,8 +34,7 @@ DEFAULT_SEARCH_ROOTS = [
     Path.home() / "Extern",
     Path.home(),
     Path("/workspace"),
-    Path("/tmp/opencode"),
-    Path("/tmp/source-investigations"),
+    *EPHEMERAL_ROOTS,
 ]
 
 SOURCE_MANIFESTS = [
@@ -179,8 +183,49 @@ def read_git_remote_url(dir_path: Path) -> str | None:
     return None
 
 
+def is_ephemeral_path(dir_path: Path) -> bool:
+    try:
+        resolved = dir_path.resolve()
+    except Exception:
+        resolved = dir_path
+    for root in EPHEMERAL_ROOTS:
+        try:
+            if resolved.is_relative_to(root.resolve()):
+                return True
+        except Exception:
+            if str(dir_path).startswith(str(root)):
+                return True
+    return False
+
+
+def get_git_remote_name(dir_path: Path) -> str | None:
+    """Return 'origin' if present, otherwise the first configured remote name."""
+    if not (dir_path / ".git").exists():
+        return None
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(dir_path), "remote"],
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+        ).decode().splitlines()
+        remotes = [r.strip() for r in out if r.strip()]
+        if "origin" in remotes:
+            return "origin"
+        return remotes[0] if remotes else None
+    except Exception:
+        return None
+
+
 def get_git_info(dir_path: Path) -> dict:
-    info = {"is_git": False, "branch": None, "commit": None, "remote_url": None, "dirty": False}
+    info = {
+        "is_git": False,
+        "branch": None,
+        "commit": None,
+        "commit_full": None,
+        "commit_date": None,
+        "remote_url": None,
+        "dirty": False,
+    }
     if not (dir_path / ".git").exists():
         return info
     try:
@@ -190,6 +235,14 @@ def get_git_info(dir_path: Path) -> dict:
         ).decode().strip()
         commit = subprocess.check_output(
             ["git", "-C", str(dir_path), "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+        commit_full = subprocess.check_output(
+            ["git", "-C", str(dir_path), "rev-parse", "HEAD"],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+        commit_date = subprocess.check_output(
+            ["git", "-C", str(dir_path), "log", "-1", "--format=%cI", "HEAD"],
             stderr=subprocess.DEVNULL
         ).decode().strip()
         status = subprocess.check_output(
@@ -202,12 +255,105 @@ def get_git_info(dir_path: Path) -> dict:
             "is_git": True,
             "branch": branch,
             "commit": commit,
+            "commit_full": commit_full,
+            "commit_date": commit_date or None,
             "remote_url": remote,
             "dirty": len(status) > 0
         })
     except Exception:
         pass
     return info
+
+
+def check_upstream_freshness(dir_path: Path, git_info: dict, timeout: float = 4.0) -> dict:
+    """Compare local HEAD against remote HEAD using git ls-remote without mutating the repo."""
+    freshness = {
+        "checked": False,
+        "remote": None,
+        "default_branch": None,
+        "upstream_commit": None,
+        "upstream_commit_short": None,
+        "on_default_branch": None,
+        "up_to_date": None,
+        "status": "unknown",
+        "error": None,
+    }
+    if not git_info.get("is_git") or not git_info.get("commit_full"):
+        freshness["error"] = "not a git repository"
+        return freshness
+
+    remote_name = get_git_remote_name(dir_path)
+    if not remote_name:
+        freshness["error"] = "no git remote configured"
+        return freshness
+
+    freshness["remote"] = remote_name
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(dir_path), "ls-remote", "--symref", remote_name, "HEAD"],
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+        ).decode(errors="replace")
+    except subprocess.TimeoutExpired:
+        freshness["error"] = f"git ls-remote timed out after {timeout:.0f}s"
+        return freshness
+    except subprocess.CalledProcessError as exc:
+        err = (exc.stderr or b"").decode(errors="replace").strip().splitlines()
+        freshness["error"] = err[0] if err else f"git ls-remote failed (exit {exc.returncode})"
+        return freshness
+    except Exception as exc:
+        freshness["error"] = str(exc)
+        return freshness
+
+    freshness["checked"] = True
+    default_branch = None
+    upstream_commit = None
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("ref:") and "\tHEAD" in line:
+            ref_target = line.split("\t", 1)[0][4:].strip()
+            if ref_target.startswith("refs/heads/"):
+                default_branch = ref_target[len("refs/heads/"):]
+        elif "\tHEAD" in line:
+            sha = line.split("\t", 1)[0].strip()
+            if re.fullmatch(r"[0-9a-fA-F]{40}", sha):
+                upstream_commit = sha
+
+    freshness["default_branch"] = default_branch
+    freshness["upstream_commit"] = upstream_commit
+    freshness["upstream_commit_short"] = upstream_commit[:7] if upstream_commit else None
+
+    local_branch = git_info.get("branch")
+    on_default = (local_branch == default_branch) if (local_branch and default_branch) else None
+    freshness["on_default_branch"] = on_default
+
+    if not upstream_commit:
+        freshness["error"] = "remote HEAD not advertised"
+        return freshness
+
+    local_full = git_info["commit_full"]
+    if local_full == upstream_commit:
+        freshness["up_to_date"] = True
+        freshness["status"] = "up_to_date"
+        return freshness
+
+    freshness["up_to_date"] = False
+    if on_default is not False:
+        try:
+            anc = subprocess.run(
+                ["git", "-C", str(dir_path), "merge-base", "--is-ancestor", upstream_commit, "HEAD"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=3,
+            )
+            if anc.returncode == 0:
+                freshness["status"] = "ahead"
+                return freshness
+        except Exception:
+            pass
+
+    freshness["status"] = "behind_or_diverged"
+    return freshness
 
 
 def matches_target(
@@ -427,10 +573,44 @@ def resolve_upstream_url(target: str) -> str | None:
     return None
 
 
+def _same_upstream_repo(remote_a: str | None, remote_b: str | None) -> bool:
+    if not remote_a or not remote_b:
+        return False
+    if remote_a.rstrip("/") == remote_b.rstrip("/"):
+        return True
+    host_a, owner_a, repo_a = parse_repo_spec(remote_a)
+    host_b, owner_b, repo_b = parse_repo_spec(remote_b)
+    return (
+        (host_a or "").lower() == (host_b or "").lower()
+        and (owner_a or "").lower() == (owner_b or "").lower()
+        and repo_a.lower() == repo_b.lower()
+    )
+
+
 def shallow_clone_to_tmp(upstream_url: str, project_name: str, target_dir: Path = None) -> tuple[Path, bool]:
     dest_dir = target_dir or (Path("/tmp/source-investigations") / project_name)
+    ephemeral_dest = is_ephemeral_path(dest_dir) or str(dest_dir).startswith("/tmp/")
+
     if dest_dir.exists() and is_valid_source_dir(dest_dir):
-        return dest_dir, True
+        if not ephemeral_dest:
+            return dest_dir, True
+
+        if (dest_dir / ".git").exists() and _same_upstream_repo(read_git_remote_url(dest_dir), upstream_url):
+            fetch_res = subprocess.run(
+                ["git", "-C", str(dest_dir), "fetch", "--depth=1", upstream_url, "HEAD"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=30,
+            )
+            if fetch_res.returncode == 0:
+                reset_res = subprocess.run(
+                    ["git", "-C", str(dest_dir), "reset", "--hard", "FETCH_HEAD"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=15,
+                )
+                if reset_res.returncode == 0:
+                    return dest_dir, True
 
     dest_dir.parent.mkdir(parents=True, exist_ok=True)
     if dest_dir.exists():
@@ -473,13 +653,41 @@ def find_system_binary(target_name: str) -> tuple[Path | None, str | None]:
     return None, None
 
 
+def _build_tier1_action(local_path: Path, git_info: dict, freshness: dict) -> str:
+    status = freshness.get("status")
+    if status == "behind_or_diverged":
+        up_short = freshness.get("upstream_commit_short") or "upstream HEAD"
+        def_branch = freshness.get("default_branch") or "default branch"
+        local_branch = git_info.get("branch") or "HEAD"
+        local_short = git_info.get("commit") or "unknown"
+        return (
+            f"WARNING: Local checkout at '{local_path}' ({local_branch} @ {local_short}) differs from "
+            f"upstream {def_branch} ({up_short}). Do not mutate user workspaces; re-run with "
+            f"--fresh --clone-tmp (or clone a fresh copy / query gh CLI) if you need current upstream state."
+        )
+    if status == "ahead":
+        return (
+            f"Local checkout at '{local_path}' is ahead of upstream HEAD (contains unpushed local commits). "
+            f"Investigate '{local_path}' for local state, or use --fresh --clone-tmp for clean upstream."
+        )
+    if status == "unknown" and git_info.get("is_git"):
+        err = freshness.get("error") or "unreachable remote"
+        return (
+            f"Local checkout at '{local_path}' found, but upstream freshness could not be verified ({err}). "
+            f"Inspect '{local_path}' or verify upstream manually."
+        )
+    return f"Investigate source files directly in '{local_path}'. Do not decompile runtimes."
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Resolve and locate source code checkouts following the 3-tier investigation hierarchy."
     )
     parser.add_argument("target", help="Tool name, package, repo name, or git URL (e.g. ripgrep, BurntSushi/ripgrep, uv)")
-    parser.add_argument("--clone-tmp", action="store_true", help="If no local clone exists, shallow clone into /tmp/source-investigations/")
-    parser.add_argument("--clone-to", help="If no local clone exists, clone into the specified directory")
+    parser.add_argument("--clone-tmp", action="store_true", help="If no local clone exists (or stale with --fresh), shallow clone into /tmp/source-investigations/")
+    parser.add_argument("--clone-to", help="If no local clone exists (or stale with --fresh), clone into the specified directory")
+    parser.add_argument("--fresh", action="store_true", help="Require local checkout to match upstream HEAD; otherwise skip to Tier 2 upstream")
+    parser.add_argument("--no-freshness-check", action="store_true", help="Skip git ls-remote upstream freshness check on Tier 1 checkouts")
     parser.add_argument("--json", action="store_true", help="Output machine-readable JSON")
     args = parser.parse_args()
 
@@ -490,38 +698,84 @@ def main():
     # Tier 1: Check existing local checkouts
     # -------------------------------------------------------------
     local_path, checked_paths = find_existing_local_clone(target)
+    skipped_stale_local = None
     if local_path:
         git_info = get_git_info(local_path)
-        result = {
-            "tier": 1,
-            "status": "found_local_clone",
-            "tier_description": "Tier 1: Existing local clone discovered.",
-            "target": target,
-            "project_name": norm_name,
-            "source_path": str(local_path),
-            "git": git_info,
-            "is_ephemeral": False,
-            "action_recommended": f"Investigate source files directly in '{local_path}'. Do not decompile runtimes."
-        }
-        if args.json:
-            print(json.dumps(result, indent=2))
+        ephemeral_local = is_ephemeral_path(local_path)
+        if args.no_freshness_check and not args.fresh:
+            freshness = {
+                "checked": False,
+                "remote": None,
+                "default_branch": None,
+                "upstream_commit": None,
+                "upstream_commit_short": None,
+                "on_default_branch": None,
+                "up_to_date": None,
+                "status": "skipped",
+                "error": None,
+            }
         else:
-            print("=" * 80)
-            print(" [TIER 1] EXISTING LOCAL SOURCE CLONE FOUND")
-            print("=" * 80)
-            print(f"Project Name:   {norm_name}")
-            print(f"Source Path:    {local_path}")
-            if git_info["is_git"]:
-                print(f"Git Revision:   {git_info['branch']} ({git_info['commit']})")
-                print(f"Remote URL:     {git_info.get('remote_url', 'unknown')}")
-                print(f"Tree Clean:     {not git_info['dirty']}")
-            print(f"\nRecommended Action: Investigate source code directly at {local_path}.")
-        return
+            freshness = check_upstream_freshness(local_path, git_info)
+
+        stale_ephemeral_clone = ephemeral_local and (args.clone_tmp or args.clone_to) and freshness.get("status") != "up_to_date"
+        skip_for_fresh = args.fresh and freshness.get("status") != "up_to_date"
+
+        if skip_for_fresh or stale_ephemeral_clone:
+            skipped_stale_local = {
+                "path": str(local_path),
+                "is_ephemeral": ephemeral_local,
+                "branch": git_info.get("branch"),
+                "commit": git_info.get("commit"),
+                "remote_url": git_info.get("remote_url"),
+                "freshness": freshness,
+            }
+        else:
+            action = _build_tier1_action(local_path, git_info, freshness)
+            result = {
+                "tier": 1,
+                "status": "found_local_clone",
+                "tier_description": "Tier 1: Existing local clone discovered.",
+                "target": target,
+                "project_name": norm_name,
+                "source_path": str(local_path),
+                "git": git_info,
+                "freshness": freshness,
+                "is_ephemeral": ephemeral_local,
+                "action_recommended": action,
+            }
+            if args.json:
+                print(json.dumps(result, indent=2))
+            else:
+                print("=" * 80)
+                print(" [TIER 1] EXISTING LOCAL SOURCE CLONE FOUND")
+                print("=" * 80)
+                print(f"Project Name:   {norm_name}")
+                print(f"Source Path:    {local_path}")
+                if git_info["is_git"]:
+                    print(f"Git Revision:   {git_info['branch']} ({git_info['commit']})")
+                    if git_info.get("commit_date"):
+                        print(f"Commit Date:    {git_info['commit_date']}")
+                    print(f"Remote URL:     {git_info.get('remote_url', 'unknown')}")
+                    print(f"Tree Clean:     {not git_info['dirty']}")
+                    up_label = freshness.get("status", "unknown")
+                    if freshness.get("upstream_commit_short"):
+                        def_branch = freshness.get("default_branch") or "HEAD"
+                        up_label = f"{up_label} (upstream {def_branch}: {freshness['upstream_commit_short']})"
+                    elif freshness.get("error"):
+                        up_label = f"{up_label} ({freshness['error']})"
+                    print(f"Freshness:      {up_label}")
+                if ephemeral_local:
+                    print("Ephemeral:      True (cached in temporary directory)")
+                print(f"\nRecommended Action: {action}")
+            return
 
     # -------------------------------------------------------------
     # Tier 2: Check upstream git repository & clone if requested
     # -------------------------------------------------------------
     upstream_url = resolve_upstream_url(target)
+    if not upstream_url and skipped_stale_local:
+        upstream_url = skipped_stale_local.get("remote_url")
+
     if upstream_url:
         if args.clone_tmp or args.clone_to:
             dest = Path(args.clone_to) if args.clone_to else (Path("/tmp/source-investigations") / norm_name)
@@ -537,7 +791,8 @@ def main():
                     "source_path": str(cloned_path),
                     "upstream_url": upstream_url,
                     "git": git_info,
-                    "is_ephemeral": bool(not args.clone_to),
+                    "is_ephemeral": bool(not args.clone_to) or is_ephemeral_path(cloned_path),
+                    "skipped_stale_local_clone": skipped_stale_local,
                     "action_recommended": f"Investigate fresh source files at '{cloned_path}'. Clean up when done if temporary."
                 }
                 if args.json:
@@ -551,6 +806,8 @@ def main():
                     print(f"Upstream URL:   {upstream_url}")
                     if git_info["is_git"]:
                         print(f"Git Revision:   {git_info['branch']} ({git_info['commit']})")
+                    if skipped_stale_local:
+                        print(f"Skipped Stale:  {skipped_stale_local['path']} ({skipped_stale_local['freshness'].get('status')})")
                     print(f"\nRecommended Action: Investigate raw source files directly at {cloned_path}.")
                 return
             else:
@@ -564,6 +821,7 @@ def main():
             "project_name": norm_name,
             "source_path": None,
             "upstream_url": upstream_url,
+            "skipped_stale_local_clone": skipped_stale_local,
             "action_recommended": f"Fetch shallow clone to /tmp/source-investigations/{norm_name} or specify destination with --clone-to."
         }
         if args.json:
@@ -574,6 +832,8 @@ def main():
             print("=" * 80)
             print(f"Project Name:   {norm_name}")
             print(f"Upstream URL:   {upstream_url}")
+            if skipped_stale_local:
+                print(f"Skipped Stale:  {skipped_stale_local['path']} ({skipped_stale_local['freshness'].get('status')})")
             print(f"\nRecommended Action: Fetch shallow clone before investigating:")
             print(f"  git clone --depth=1 {upstream_url} /tmp/source-investigations/{norm_name}")
             print(f"Or re-run with: resolve_source.sh {target} --clone-tmp")

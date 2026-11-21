@@ -1,5 +1,5 @@
 ---
-name: MCP Server Tester
+name: mcp-server-tester
 description: This skill should be used when the user asks to "test mcp servers", "check mcp status", "verify mcp tools", "test configured mcp", or "inspect configured mcp servers". It provides a testing script that parses settings.json and checks the responsiveness of enabled MCP servers using the mcptools CLI.
 version: 0.1.0
 ---

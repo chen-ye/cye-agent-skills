@@ -31,13 +31,16 @@ Always resolve and examine target software using this strict precedence order:
 Before manually searching directories or invoking `git clone`, run `scripts/resolve_source.sh`:
 
 ```bash
-# Check if a local clone exists, or identify upstream repository
+# Check if a local clone exists (also checks upstream freshness), or identify upstream repository
 ~/.config/opencode/skills/investigate-source/scripts/resolve_source.sh <target-name-or-url>
 
-# Automatically clone to /tmp/source-investigations/ if not present locally
+# Require upstream HEAD; skip stale local clones and fetch a fresh shallow clone
+~/.config/opencode/skills/investigate-source/scripts/resolve_source.sh <target-name-or-url> --fresh --clone-tmp
+
+# Automatically clone to /tmp/source-investigations/ if not present locally (refreshes stale /tmp caches)
 ~/.config/opencode/skills/investigate-source/scripts/resolve_source.sh <target-name-or-url> --clone-tmp
 
-# Output machine-readable JSON for subagent pipelines
+# Output machine-readable JSON for subagent pipelines (add --no-freshness-check for offline mode)
 ~/.config/opencode/skills/investigate-source/scripts/resolve_source.sh <target-name-or-url> --json
 ```
 
